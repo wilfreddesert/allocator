@@ -152,5 +152,27 @@ void malloc_addblock(void *addr, size_t size)
 	if_created=1;
 }
 
+void fl_realloc(void *addr, size_t size) {
+	alloc_node_t *blk;
 
+	void *new = malloc(size);
+	if (new==NULL){
+		 return;
+	}
+		 // If addr doesn't point to anything, we just add block
+	malloc_addblock(new, size);	
+	
 
+	if (addr!=NULL)
+	{
+		// Copy the contents of the block of old size to the new block
+		int c = memcpy(new, addr, sizeof(addr));
+		printf("MEMCPY: %d\n", c);
+		// Update the pointer reference
+		addr = new;
+		//Free my_block
+		free(addr);
+	}
+		printf("Reallocated a block on the host, pointer: %p, size %d\n", new, size);
+		return;
+}
