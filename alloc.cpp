@@ -1,34 +1,32 @@
 #include "alloc.h"
 #include <stdio.h>
 #include <utility> 
-using namespace std;
 
 CleverPtr* Allocator::a_alloc(size_t size){
-   if(size<=Allocator::maxblocksize){
-        DoublyLinkedList::Node* tmp = new DoublyLinkedList::Node;
-		tmp = DoublyLinkedList::head;
-        size = align_up(size, sizeof(void *));
-        while(tmp!=NULL){
-            if (tmp->is_free){
-                if(tmp->size >= size){
-                   tmp->size -= size;
-                   DoublyLinkedList::Node *blk = new DoublyLinkedList::Node;
-                   DoublyLinkedList::insert(tmp->previous, blk);
-				   tmp->previous->size = size;
-                   tmp->previous->is_free = false;
-                   return new CleverPtr(blk);
-               }
-           }
-           tmp = tmp->next;
-       }
-   }
+	if(size<=Allocator::maxblocksize){
+		DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+		size = align_up(size, sizeof(void *));
+		while(tmp!=NULL){
+			if (tmp->is_free){
+				if(tmp->size >= size){
+					tmp->size -= size;
+					DoublyLinkedList::Node* blk = DoublyLinkedList::head;
+					DoublyLinkedList::insert(tmp->previous, blk);
+					tmp->size = size;
+					tmp->is_free = false;
+					return new CleverPtr(tmp);
+				}
+			}
+			tmp = tmp->next;
+		}
+	}
 }
 
 void Allocator::a_free(CleverPtr* blk){
 	if (!(blk->block->is_free)){
-       if(blk->block->previous->is_free)
+       if(blk->block->previous!=NULL && blk->block->previous->is_free)
        {
-            if(blk->block->next->is_free){
+		   if(blk->block->next!=NULL && blk->block->next->is_free){
                blk->block->previous->size += (blk->block->size + blk->block->next->size);
                DoublyLinkedList::remove(blk->block->next);
                DoublyLinkedList::remove(blk->block);
@@ -39,7 +37,7 @@ void Allocator::a_free(CleverPtr* blk){
 
            return;
        }
-       if(blk->block->next->is_free)
+       if(blk->block->next!=NULL && blk->block->next->is_free)
        {
            blk->block->next->size += blk->block->size;
            DoublyLinkedList::remove(blk->block);
@@ -62,13 +60,27 @@ void Allocator::a_realloc(CleverPtr* mem, size_t new_size){
 }
 
 void Allocator::a_defrag(){
-    
+	DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+	while(tmp!=NULL){
+		if(tmp->is_free && tmp->next!=NULL){
+			tmp = tmp ->next;
+			if (DoublyLinkedList::tail->is_free){
+				DoublyLinkedList::tail->size += tmp->previous->size;
+			}
+			else {
+				DoublyLinkedList::insert(DoublyLinkedList::tail, tmp->previous);
+			}
+			memmove(tmp->previous, tmp, sizeof(tmp));
+			tmp = DoublyLinkedList::head;
+		}
+		tmp = tmp->next;
+	}
 }
 
 void Allocator::show_busy_blocks(){
-   DoublyLinkedList::Node *tmp = new DoublyLinkedList::Node;
-   tmp = DoublyLinkedList::head;
-   while(tmp!=NULL){
+	printf("\n Busy blocks:\n");
+    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+    while(tmp!=NULL){
         if (!tmp->is_free && tmp->links!=0){
             printf("Address:%p, Size:%d\n", &tmp, tmp->size);
         }
@@ -77,30 +89,29 @@ void Allocator::show_busy_blocks(){
 }
 
 void Allocator::show_free_blocks(){
-    DoublyLinkedList::Node *tmp = new DoublyLinkedList::Node;
-    tmp = DoublyLinkedList::head;
+	printf("\n Free blocks:\n");
+    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
     while(tmp!=NULL){
         if (tmp->is_free && tmp->links!=0){
-            printf("Address:%p, Size:%d\n", &tmp, tmp->size);
+			printf("Address:%p, Size:%d\n", tmp->data, tmp->size);
         }
         tmp = tmp->next;
    }    
 }
 
 void Allocator::show_hang_blocks(){
-    DoublyLinkedList::Node *tmp = new DoublyLinkedList::Node;
-    tmp = DoublyLinkedList::head;
+	printf("\n Hang blocks:\n");
+    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
     while(tmp!=NULL){
         if (!tmp->links){
-            printf("Address:%p, Size:%d\n", &tmp, tmp->size);
+			printf("Address:%p, Size:%d\n", tmp->data, tmp->size);
         }
         tmp = tmp->next;    
    }
 }
 
 void Allocator::free_hang_blocks(){
-    DoublyLinkedList::Node *tmp = new DoublyLinkedList::Node;
-    tmp = DoublyLinkedList::head;
+    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
     while(tmp!=NULL){
         if (!tmp->links){
 			if (!(tmp->is_free)){
@@ -130,4 +141,5 @@ void Allocator::free_hang_blocks(){
 		}
         tmp = tmp->next;
 	}
+	return;
 }
