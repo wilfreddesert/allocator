@@ -1,2 +1,2 @@
 # allocator
-This is a simple allocator implemented in C using doubly-linked lists.
+This is a simple allocator implemented in C++ using doubly-linked lists.
