@@ -9,8 +9,6 @@ int main(void)
    
 
 	printf("Allocated a block on the host, pointer: %p, size %d\n", my_block, MALLOC_SIZE);
-
-    my_block->show_free_blocks();
 	
 	DoublyLinkedList::Node* t1 = my_block->a_alloc(1000*1000)->blocks;
 	DoublyLinkedList::Node* t2 = my_block->a_alloc(3*1000*1000)->blocks;
@@ -20,13 +18,17 @@ int main(void)
 	DoublyLinkedList::Node* t6 = my_block->a_alloc(400)->blocks;
 	DoublyLinkedList::Node* t7 = my_block->a_alloc(400*1000)->blocks;
 
-	my_block->show_busy_blocks();
-	my_block->show_free_blocks();
+	//my_block->show_busy_blocks();
+	//my_block->show_free_blocks();
 	my_block->a_free(t3);
 	my_block->a_free(t1);
+	my_block->a_free(t1);
+	t7 = my_block->a_alloc(400*1000)->blocks;
+
+	my_block->a_realloc(MALLOC_SIZE, 2*MALLOC_SIZE);
 	my_block->show_free_blocks();
+	my_block->a_defrag();
 	my_block->show_busy_blocks();
-	my_block->show_hang_blocks();
 	getchar();getchar();
 
 

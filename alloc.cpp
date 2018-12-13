@@ -4,6 +4,7 @@
 
 
 CleverPtr* Allocator::a_alloc(size_t size){
+	printf("Allocating a block of size :%d\n",size);
 	if(size<=Allocator::maxblocksize){
 		DoublyLinkedList::Node *tmp = l.head;
 		CleverPtr *cur_d = (CleverPtr*)(mem);
@@ -29,12 +30,13 @@ CleverPtr* Allocator::a_alloc(size_t size){
 			}
 			tmp = tmp->next;
 		}
-			printf("Not enough space\n");
+			printf("\nERROR! Not enough space\n\n");
 			return cur_d;
 	}
 }
 
 void Allocator::a_free(DoublyLinkedList::Node* blk){
+	printf("Freeing a block...\n");
 	if (!(blk->is_free)){
        if(blk->previous!=NULL && blk->previous->is_free)
        {
@@ -58,18 +60,25 @@ void Allocator::a_free(DoublyLinkedList::Node* blk){
        blk->is_free=true;
        return;
    }
+	printf("\nERROR! Block is already free\n\n");
 }
 
-void Allocator::a_realloc(CleverPtr* mem, size_t new_size){
-    DoublyLinkedList::Node *tmp;
-    memmove(tmp, mem, sizeof(mem));
-    free(mem);
+void Allocator::a_realloc(size_t size, size_t new_size){
+	printf("Reallocating a block of size :%d\n",new_size);
+	void *tmp = mem;
+    //memmove(tmp, mem, sizeof(mem));
+    //free(mem);
 	Allocator::Allocator(new_size);
 	memmove(mem, tmp, sizeof(tmp));
+	void * addr = l.find_last(mem);
+	DoublyLinkedList::Node *block = (DoublyLinkedList::Node*)((char *)addr - sizeof(DoublyLinkedList::Node));
+	block = l.newNode(block, new_size-size, mem, l.tail, nullptr, true, 1);
+	l.tail = block;
+	return;
 }
 
 void Allocator::a_defrag(){
-	
+	printf("Defragmentation in progress...\n");
 	DoublyLinkedList::Node *tmp = l.head;
 	while(tmp!=NULL)
 	{
