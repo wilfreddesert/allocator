@@ -2,48 +2,60 @@
 #include <stdio.h>
 #include <utility> 
 
+
 CleverPtr* Allocator::a_alloc(size_t size){
 	if(size<=Allocator::maxblocksize){
-		DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
-		size = align_up(size, sizeof(void *));
+		DoublyLinkedList::Node *tmp = l.head;
+		CleverPtr *cur_d = (CleverPtr*)(mem);
+		cur_d->blocks = nullptr;
 		while(tmp!=NULL){
 			if (tmp->is_free){
 				if(tmp->size >= size){
+					
+					void * addr = l.find_last(mem);
+					DoublyLinkedList::Node *blk = (DoublyLinkedList::Node*)((char *)addr - sizeof(DoublyLinkedList::Node));
+					cur_d = Allocator::best_fit_block(size);
 					tmp->size -= size;
-					DoublyLinkedList::Node* blk = DoublyLinkedList::head;
-					DoublyLinkedList::insert(tmp->previous, blk);
-					tmp->size = size;
-					tmp->is_free = false;
-					return new CleverPtr(tmp);
+					blk = l.newNode(blk, size, (char*)cur_d->blocks->data+size, tmp->previous, tmp, false, 1);
+					if (blk->previous==nullptr){
+						l.head = blk;
+					}
+					if (blk->next==nullptr){
+						l.tail = blk;
+					}
+					CleverPtr ret = CleverPtr::CleverPtr(blk);
+					return &ret;
 				}
 			}
 			tmp = tmp->next;
 		}
+			printf("Not enough space\n");
+			return cur_d;
 	}
 }
 
-void Allocator::a_free(CleverPtr* blk){
-	if (!(blk->block->is_free)){
-       if(blk->block->previous!=NULL && blk->block->previous->is_free)
+void Allocator::a_free(DoublyLinkedList::Node* blk){
+	if (!(blk->is_free)){
+       if(blk->previous!=NULL && blk->previous->is_free)
        {
-		   if(blk->block->next!=NULL && blk->block->next->is_free){
-               blk->block->previous->size += (blk->block->size + blk->block->next->size);
-               DoublyLinkedList::remove(blk->block->next);
-               DoublyLinkedList::remove(blk->block);
+		   if(blk->next!=NULL && blk->next->is_free){
+               blk->previous->size += (blk->size + blk->next->size);
+               l.remove(blk->next);
+               l.remove(blk);
                return;
            }
-           blk->block->previous->size +=blk->block->size;
-           DoublyLinkedList::remove(blk->block);
+           blk->previous->size +=blk->size;
+           l.remove(blk);
 
            return;
        }
-       if(blk->block->next!=NULL && blk->block->next->is_free)
+       if(blk->next!=NULL && blk->next->is_free)
        {
-           blk->block->next->size += blk->block->size;
-           DoublyLinkedList::remove(blk->block);
+           blk->next->size += blk->size;
+           l.remove(blk);
            return;
        }
-       blk->block->is_free=true;
+       blk->is_free=true;
        return;
    }
 }
@@ -52,26 +64,33 @@ void Allocator::a_realloc(CleverPtr* mem, size_t new_size){
     DoublyLinkedList::Node *tmp;
     memmove(tmp, mem, sizeof(mem));
     free(mem);
-	mem->block->data =  malloc(new_size);
-	mem->block->data = (void *)align_up((uintptr_t)mem, sizeof(void*));
-    mem->block->size = (uintptr_t)mem + new_size;
-	DoublyLinkedList::head = mem->block;
-    memmove(mem, tmp, sizeof(tmp));
+	Allocator::Allocator(new_size);
+	memmove(mem, tmp, sizeof(tmp));
 }
 
 void Allocator::a_defrag(){
-	DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+	
+	DoublyLinkedList::Node *tmp = l.head;
+	while(tmp!=NULL)
+	{
+		if(tmp->next == NULL){
+			l.tail=tmp;
+			break;
+		}
+		tmp = tmp->next;
+		
+	}
 	while(tmp!=NULL){
 		if(tmp->is_free && tmp->next!=NULL){
 			tmp = tmp ->next;
-			if (DoublyLinkedList::tail->is_free){
-				DoublyLinkedList::tail->size += tmp->previous->size;
+			if (l.tail->is_free){
+				l.tail->size += tmp->previous->size;
 			}
 			else {
-				DoublyLinkedList::insert(DoublyLinkedList::tail, tmp->previous);
+//				l.insert(l.tail, tmp->previous);
 			}
 			memmove(tmp->previous, tmp, sizeof(tmp));
-			tmp = DoublyLinkedList::head;
+			tmp = l.head;
 		}
 		tmp = tmp->next;
 	}
@@ -79,10 +98,10 @@ void Allocator::a_defrag(){
 
 void Allocator::show_busy_blocks(){
 	printf("\n Busy blocks:\n");
-    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+    DoublyLinkedList::Node *tmp = l.head;
     while(tmp!=NULL){
         if (!tmp->is_free && tmp->links!=0){
-            printf("Address:%p, Size:%d\n", &tmp, tmp->size);
+			printf("Address:%p, Size:%d\n", tmp->data, tmp->size);
         }
         tmp = tmp->next;
    }   
@@ -90,7 +109,7 @@ void Allocator::show_busy_blocks(){
 
 void Allocator::show_free_blocks(){
 	printf("\n Free blocks:\n");
-    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+    DoublyLinkedList::Node *tmp = l.head;
     while(tmp!=NULL){
         if (tmp->is_free && tmp->links!=0){
 			printf("Address:%p, Size:%d\n", tmp->data, tmp->size);
@@ -101,7 +120,7 @@ void Allocator::show_free_blocks(){
 
 void Allocator::show_hang_blocks(){
 	printf("\n Hang blocks:\n");
-    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+    DoublyLinkedList::Node *tmp = l.head;
     while(tmp!=NULL){
         if (!tmp->links){
 			printf("Address:%p, Size:%d\n", tmp->data, tmp->size);
@@ -111,7 +130,7 @@ void Allocator::show_hang_blocks(){
 }
 
 void Allocator::free_hang_blocks(){
-    DoublyLinkedList::Node *tmp = DoublyLinkedList::head;
+    DoublyLinkedList::Node *tmp = l.head;
     while(tmp!=NULL){
         if (!tmp->links){
 			if (!(tmp->is_free)){
@@ -119,19 +138,19 @@ void Allocator::free_hang_blocks(){
 				{
 					if(tmp->next->is_free){
 					   tmp->previous->size += (tmp->size + tmp->next->size);
-					   DoublyLinkedList::remove(tmp->next);
-					   DoublyLinkedList::remove(tmp);
+					   l.remove(tmp->next);
+					   l.remove(tmp);
 					}
 					else{
 						tmp->previous->size +=tmp->size;
-						DoublyLinkedList::remove(tmp);
+						l.remove(tmp);
 					}
 				}
 				else{
 					if(tmp->next->is_free)
 					{
 						tmp->next->size += tmp->size;
-						DoublyLinkedList::remove(tmp);
+						l.remove(tmp);
 					}
 					else{
 						tmp->is_free=true;
@@ -142,4 +161,22 @@ void Allocator::free_hang_blocks(){
         tmp = tmp->next;
 	}
 	return;
+}
+
+CleverPtr* Allocator::best_fit_block(size_t size)
+{
+	size_t minsize = maxblocksize;
+	DoublyLinkedList::Node *tmp = l.head;
+	DoublyLinkedList::Node *fit_block;
+	while(tmp!=NULL)
+	{
+		if(tmp->is_free)
+			if((minsize >= tmp->size) && (size <= tmp->size)) {
+				minsize = tmp->size;
+				fit_block = tmp;
+			}
+			tmp = tmp->next;
+	}
+	CleverPtr ret = CleverPtr::CleverPtr(fit_block);
+	return &ret;
 }
